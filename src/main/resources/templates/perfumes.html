@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout :: head('Perfumes - PPA')}"></head>
+<body>
+    <div th:replace="~{layout :: sidebar}"></div>
+    
+    <div class="main-content">
+        <div class="topbar">
+            <h1 class="page-title">Perfumes Catalog</h1>
+            <div style="flex:1"></div>
+            <a th:href="@{/add-perfume}" class="btn btn-primary">New Perfume</a>
+        </div>
+
+        <div class="content-area">
+            <div class="panel">
+                <div th:if="${perfumes.empty}" class="empty-state">
+                    No perfumes tracked yet. Add one to start.
+                </div>
+                
+                <table th:unless="${perfumes.empty}">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Brand</th>
+                            <th>Name</th>
+                            <th>Gender</th>
+                            <th>Added</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="p : ${perfumes}">
+                            <td th:text="${p.id}"></td>
+                            <td th:text="${p.brand}"></td>
+                            <td th:text="${p.name}"></td>
+                            <td th:text="${p.gender}"></td>
+                            <td th:text="${#temporals.format(p.createdAt, 'yyyy-MM-dd')}"></td>
+                            <td>
+                                <a th:href="@{/perfumes/{id}(id=${p.id})}" class="btn btn-sm">View Details</a>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout :: head(${perfume.name} + ' - PPA')}"></head>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<body>
+    <div th:replace="~{layout :: sidebar}"></div>
+    
+    <div class="main-content">
+        <div class="topbar">
+            <h1 class="page-title" th:text="${perfume.brand} + ' ' + ${perfume.name}">Perfume Details</h1>
+            <div style="flex:1"></div>
+            <span class="btn" style="pointer-events:none; background:transparent; border:none;" th:text="${perfume.gender}"></span>
+        </div>
+
+        <div class="content-area">
+            
+            <div class="panel d-flex justify-between align-center">
+                <div>
+                    <h2 style="margin-top:0;">Price Trackers</h2>
+                    <p style="color:var(--text-muted); margin-bottom:0;">Automated parsing from added store URLs.</p>
+                </div>
+                <div class="d-flex gap-10">
+                    <input type="url" id="newUrl" placeholder="https://notino... or makeup..." style="width: 350px;">
+                    <button class="btn btn-primary" onclick="fetchOptions()">Fetch Options</button>
+                    <button class="btn" onclick="toggleManualPaste()">Manual Paste</button>
+                    <button class="btn" onclick="refreshAllPrices()">Refresh All</button>
+                </div>
+            </div>
+
+            <div id="manualPastePanel" class="panel" style="display:none; margin-top:15px; border-left: 4px solid var(--secondary-color);">
+                <h3 style="margin-top:0;">Manual HTML Paste</h3>
+                <p style="color:var(--text-muted); margin-bottom: 10px;">If the site blocks automated access, copy the page HTML from your browser and paste it here.</p>
+                <textarea id="manualHtml" placeholder="Paste HTML here..." style="width: 100%; height: 200px; margin-bottom: 10px; font-family: monospace;"></textarea>
+                <div class="d-flex justify-end">
+                    <button class="btn btn-primary" onclick="parseManualHtml()">Parse HTML</button>
+                </div>
+            </div>
+            
+            <div id="variantsPanel" class="panel" style="display:none; margin-top:15px; border-left: 4px solid var(--primary-color);">
+                <h3 style="margin-top:0;">Available Variants</h3>
+                <p style="color:var(--text-muted); margin-bottom: 10px;">Select the formats you want to track from this URL.</p>
+                <div id="variantsContainer" class="d-flex gap-10" style="flex-wrap: wrap;">
+                    <!-- Variants will be injected here -->
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="d-flex justify-between align-center" style="margin-bottom: 15px;">
+                    <h3 style="margin: 0;">Price History</h3>
+                </div>
+                <div th:if="${perfume.prices == null or perfume.prices.empty}" class="empty-state">
+                    No prices tracked for this perfume. Paste a product URL above to start.
+                </div>
+                
+                <div th:unless="${perfume.prices == null or perfume.prices.empty}" style="height: 300px; margin-bottom: 20px;">
+                    <canvas id="priceChart"></canvas>
+                </div>
+
+                <div th:unless="${perfume.prices == null or perfume.prices.empty}" style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr>
+                            <th style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: left;">Store</th>
+                            <th style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: left;">Volume (ml)</th>
+                            <th style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: left;">Price (Local)</th>
+                            <th style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: left;">Price (USD)</th>
+                            <th style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: left;">Price/ML (USD)</th>
+                            <th style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: left;">Last Checked</th>
+                            <th style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: left;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="price : ${perfume.prices}">
+                            <td style="padding: 10px; border-bottom: 1px solid var(--border-color);" th:text="${price.storeName}">Store</td>
+                            <td style="padding: 10px; border-bottom: 1px solid var(--border-color);" th:text="${price.volume != null ? price.volume + ' ml' : 'N/A'}">Volume</td>
+                            <td style="padding: 10px; border-bottom: 1px solid var(--border-color); font-weight: bold;">
+                                <span th:text="${price.price}"></span> <span th:text="${price.currency}"></span>
+                            </td>
+                            <td style="padding: 10px; border-bottom: 1px solid var(--border-color);" class="price-tag" th:text="${price.convertedPriceUsd != null ? '$' + price.convertedPriceUsd : '-'}"></td>
+                            <td style="padding: 10px; border-bottom: 1px solid var(--border-color);" th:text="${price.pricePerMlUsd != null ? '$' + price.pricePerMlUsd + '/ml' : '-'}"></td>
+                            <td style="padding: 10px; border-bottom: 1px solid var(--border-color);" th:text="${#temporals.format(price.createdAt, 'yyyy-MM-dd HH:mm')}"></td>
+                            <td style="padding: 10px; border-bottom: 1px solid var(--border-color); display:flex; gap: 5px;">
+                                <a th:href="${price.productUrl}" target="_blank" class="btn btn-sm">Visit Store</a>
+                                <button class="btn btn-sm" style="background:#dc3545; color:white;" th:attr="onclick='deletePrice(' + ${price.id} + ')'">Delete</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+    </div>
+
+    <script th:inline="javascript">
+        const perfumeId = /*[[${perfume.id}]]*/ 0;
+
+        function toggleManualPaste() {
+            const panel = document.getElementById('manualPastePanel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+        
+        function parseManualHtml() {
+            const url = document.getElementById('newUrl').value.trim();
+            const html = document.getElementById('manualHtml').value.trim();
+            
+            if(!url) {
+                alert("Please enter the store URL first.");
+                return;
+            }
+            if(!html) {
+                alert("Please paste the HTML content.");
+                return;
+            }
+            
+            document.getElementById('variantsContainer').innerHTML = 'Loading...';
+            document.getElementById('variantsPanel').style.display = 'block';
+            
+            fetch('/api/prices/parse-manual', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ url: url, html: html })
+            })
+            .then(res => {
+                if (res.ok) return res.json();
+                return res.text().then(text => { throw new Error(text) });
+            })
+            .then(variants => renderVariants(variants))
+            .catch(err => {
+                alert("Error parsing manual HTML: " + err.message);
+                document.getElementById('variantsPanel').style.display = 'none';
+            });
+        }
+
+        function fetchOptions() {
+            const urlInput = document.getElementById('newUrl');
+            const url = urlInput.value.trim();
+            if (!url) return;
+ 
+            urlInput.disabled = true;
+            document.getElementById('variantsContainer').innerHTML = 'Loading...';
+            document.getElementById('variantsPanel').style.display = 'block';
+            
+            fetch('/api/prices/parse', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ perfumeId: perfumeId, url: url })
+            })
+            .then(res => {
+                if (res.ok) return res.json();
+                return res.text().then(text => { throw new Error(text) });
+            })
+            .then(variants => renderVariants(variants))
+            .catch(err => {
+                alert("Error fetching options: " + err.message);
+                document.getElementById('variantsPanel').style.display = 'none';
+                urlInput.disabled = false;
+            });
+        }
+        
+        function renderVariants(variants) {
+            const container = document.getElementById('variantsContainer');
+            container.innerHTML = '';
+            
+            if(variants.length === 0) {
+                container.innerHTML = 'No variants found. You may need to check your selectors or JSON-LD.';
+                document.getElementById('newUrl').disabled = false;
+                return;
+            }
+            
+            variants.forEach((v, index) => {
+                const card = document.createElement('div');
+                card.style.border = '1px solid var(--border-color)';
+                card.style.padding = '10px';
+                card.style.borderRadius = '4px';
+                card.style.background = 'var(--panel-bg)';
+                card.style.minWidth = '200px';
+                
+                const title = v.variantName ? v.variantName : (v.volume ? v.volume + 'ml' : 'Unknown');
+                
+                card.innerHTML = `
+                    <div style="font-weight: bold; margin-bottom: 5px;">${title}</div>
+                    <div style="color: var(--text-muted); margin-bottom: 10px;">${v.price} ${v.currency}</div>
+                    <button class="btn btn-success" style="width: 100%; padding: 5px;" onclick='trackVariant(${JSON.stringify(v)})'>Track This</button>
+                `;
+                container.appendChild(card);
+            });
+            document.getElementById('newUrl').disabled = false;
+        }
+        
+        function trackVariant(variantData) {
+            fetch('/api/prices/track', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(variantData)
+            })
+            .then(res => {
+                if(res.ok) window.location.reload();
+                else return res.text().then(text => { throw new Error(text) });
+            })
+            .catch(err => alert("Error saving tracker: " + err.message));
+        }
+
+        function deletePrice(priceId) {
+            if(!confirm("Are you sure you want to delete this tracked price?")) return;
+            
+            fetch('/api/prices/' + priceId, {
+                method: 'DELETE'
+            })
+            .then(res => {
+                if(res.ok) window.location.reload();
+                else return res.text().then(text => { throw new Error(text) });
+            })
+            .catch(err => alert("Error deleting price: " + err.message));
+        }
+        
+        function refreshAllPrices() {
+            alert('Refreshes happen automatically in background. Manual trigger can be implemented here.');
+        }
+
+        // Chart.js Visualization Logic
+        document.addEventListener('DOMContentLoaded', function() {
+            const ctx = document.getElementById('priceChart');
+            if (!ctx) return;
+            
+            const datasets = [];
+            const allDates = new Set();
+            
+            /*[# th:each="price : ${perfume.prices}"]*/
+                var dataPoints = [];
+                
+                /*[# th:each="hist : ${price.history}"]*/
+                    dataPoints.push({
+                        x: /*[[${#temporals.format(hist.timestamp, 'yyyy-MM-dd HH:mm')}]]*/ '',
+                        y: /*[[${hist.price}]]*/ 0
+                    });
+                    allDates.add(/*[[${#temporals.format(hist.timestamp, 'yyyy-MM-dd HH:mm')}]]*/ '');
+                /*[/]*/
+                
+                if(dataPoints.length === 0) {
+                    var createDate = /*[[${#temporals.format(price.createdAt, 'yyyy-MM-dd HH:mm')}]]*/ '';
+                    dataPoints.push({ x: createDate, y: /*[[${price.price}]]*/ 0 });
+                    allDates.add(createDate);
+                }
+                
+                // Add current price as the latest point
+                var currentDate = /*[[${#temporals.format(#temporals.createNow(), 'yyyy-MM-dd HH:mm')}]]*/ '';
+                dataPoints.push({ x: currentDate, y: /*[[${price.price}]]*/ 0 });
+                allDates.add(currentDate);
+
+                // generate distinct colors based on store and variant name
+                var storeName = /*[[${price.storeName}]]*/ '';
+                var variantName = /*[[${price.variantName}]]*/ '';
+                var volumeVal = /*[[${price.volume != null ? price.volume : ''}]]*/ '';
+                
+                var str = storeName + '-' + variantName;
+                var hash = 0;
+                for (var i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+                var color = '#' + (hash & 0x00FFFFFF).toString(16).padStart(6, '0');
+
+                var displayLabel = storeName;
+                if (variantName && variantName !== 'null' && variantName !== '' && variantName !== volumeVal + ' ml' && variantName !== volumeVal + 'ml') {
+                    displayLabel += ' - ' + variantName;
+                }
+                if (volumeVal && volumeVal !== 'null') {
+                    displayLabel += ' ' + volumeVal + 'ml';
+                }
+
+                datasets.push({
+                    label: displayLabel,
+                    data: dataPoints,
+                    fill: false,
+                    tension: 0.1,
+                    borderColor: color,
+                    backgroundColor: color,
+                    borderWidth: 2,
+                    stepped: true
+                });
+            /*[/]*/
+            
+            const sortedLabels = Array.from(allDates).sort();
+
+            datasets.forEach(ds => {
+                 const map = {};
+                 ds.data.forEach(dp => map[dp.x] = dp.y);
+                 
+                 let lastKnown = null;
+                 ds.data = sortedLabels.map(l => {
+                     if (map[l] !== undefined) {
+                         lastKnown = map[l];
+                     }
+                     return lastKnown;
+                 });
+            });
+            
+            if (datasets.length > 0) {
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: sortedLabels,
+                        datasets: datasets
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        spanGaps: true,
+                        scales: {
+                            y: { beginAtZero: false }
+                        }
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>

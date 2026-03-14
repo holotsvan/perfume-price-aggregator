@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:fragment="head(title)">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${title}">PPA</title>
+    <link rel="stylesheet" th:href="@{/css/styles.css}">
+</head>
+<body>
+    <div th:fragment="sidebar" class="sidebar">
+        <div class="sidebar-header">PPA WORKSPACE</div>
+        <ul class="nav-links">
+            <li><a th:href="@{/perfumes}">Perfumes</a></li>
+            <li><a th:href="@{/add-perfume}">Add Perfume</a></li>
+            <li><a th:href="@{/stores}">Stores</a></li>
+        </ul>
+    </div>
+</body>
+</html>

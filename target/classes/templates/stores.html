@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout :: head('Stores - PPA')}"></head>
+<body>
+    <div th:replace="~{layout :: sidebar}"></div>
+    
+    <div class="main-content">
+        <div class="topbar">
+            <h1 class="page-title">Registered Stores</h1>
+        </div>
+
+        <div class="content-area">
+            
+            <div class="panel d-flex justify-between align-center">
+                <div>
+                    <h2 style="margin-top:0;">Supported Parsers</h2>
+                    <p style="color:var(--text-muted); margin-bottom:0;">Stores discovered automatically during tracking.</p>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div th:if="${stores.empty}" class="empty-state">
+                    No stores tracked yet.
+                </div>
+                
+                <table th:unless="${stores.empty}">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Store Name</th>
+                            <th>Parser Implementation</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="s : ${stores}">
+                            <td th:text="${s.id}"></td>
+                            <td th:text="${s.name}"></td>
+                            <td th:text="${s.parserType}"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
